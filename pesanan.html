@@ -65,6 +65,7 @@
           <thead class="thead-light">
             <tr>
               <th>ID</th>
+              <th>Nama Pemesan</th>
               <th>No. Meja</th>
               <th>Nama Pesanan</th>
               <th>Jumlah</th>
@@ -93,6 +94,10 @@
         </div>
         <div class="modal-body">
           <form id="orderForm">
+            <div class="form-group">
+              <label for="pemesanName">Nama Pemesan</label>
+              <input type="text" class="form-control" id="pemesanName" required>
+            </div>
             <div class="form-group">
               <label for="tableNumber">No. Meja</label>
               <input type="number" class="form-control" id="tableNumber" required>
@@ -146,6 +151,11 @@
       </div>
   <!-- Akhir Footer -->
 
+    <!-- Firebase App (core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <!-- Firebase Realtime Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
@@ -154,48 +164,121 @@
     <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
     <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.10.21/js/dataTables.bootstrap4.min.js"></script>
+    
     <script>
+      // Your web app's Firebase configuration
+     // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyB_bnJ-oJbpsG-K4KO7LgDsXBooxqf1eto",
+  authDomain: "derisrisol.firebaseapp.com",
+  projectId: "derisrisol",
+  storageBucket: "derisrisol.appspot.com",
+  messagingSenderId: "319730589626",
+  appId: "1:319730589626:web:c5b8651b7f5cc35c3d8783",
+  measurementId: "G-HMW7N71MCN"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+      ;
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      
       $(document).ready(function() {
           var table = $('#example').DataTable();
+
+          // Load orders from Firebase
+          firebase.database().ref('orders').on('value', function(snapshot) {
+              table.clear().draw();
+              snapshot.forEach(function(childSnapshot) {
+                  var order = childSnapshot.val();
+                  var newRow = table.row.add([
+                      table.rows().count() + 1,
+                      order.pemesanName,
+                      order.tableNumber,
+                      order.orderName,
+                      order.quantity,
+                      order.date,
+                      order.status,
+                      '<span class="badge badge-success badge-custom">Selesai</span> <span class="badge badge-warning badge-custom">Dalam Proses</span>'
+                  ]).draw().node();
+
+                  // Add click event for new badges
+                  $(newRow).find('.badge-success').on('click', function() {
+                      $(this).parents('tr').find('td:eq(6)').text('Selesai');
+                  });
+                  $(newRow).find('.badge-warning').on('click', function() {
+                      $(this).parents('tr').find('td:eq(6)').text('Dalam Proses');
+                  });
+              });
+          });
 
           // Add order
           $('#orderForm').on('submit', function(event) {
               event.preventDefault();
               
+              var pemesanName = $('#pemesanName').val();
               var tableNumber = $('#tableNumber').val();
               var orderName = $('#orderName').val();
               var quantity = $('#quantity').val();
               var date = $('#date').val();
               var status = $('#status').val();
 
-              var newRow = table.row.add([
-                  table.rows().count() + 1,
-                  tableNumber,
-                  orderName,
-                  quantity,
-                  date,
-                  status,
-                  '<span class="badge badge-success badge-custom">Selesai</span> <span class="badge badge-warning badge-custom">Dalam Proses</span>'
-              ]).draw().node();
-              
-              // Add click event for new badges
-              $(newRow).find('.badge-success').on('click', function() {
-                  $(this).parents('tr').find('td:eq(5)').text('Selesai');
-              });
-              $(newRow).find('.badge-warning').on('click', function() {
-                  $(this).parents('tr').find('td:eq(5)').text('Dalam Proses');
-              });
+              var newOrder = {
+                  pemesanName: pemesanName,
+                  tableNumber: tableNumber,
+                  orderName: orderName,
+                  quantity: quantity,
+                  date: date,
+                  status: status
+              };
 
-              $('#addOrderModal').modal('hide');
-              $('#orderForm')[0].reset();
+              // Save to Firebase
+              var newOrderKey = firebase.database().ref().child('orders').push().key;
+              var updates = {};
+              updates['/orders/' + newOrderKey] = newOrder;
+
+              firebase.database().ref().update(updates).then(() => {
+                  var newRow = table.row.add([
+                      table.rows().count() + 1,
+                      pemesanName,
+                      tableNumber,
+                      orderName,
+                      quantity,
+                      date,
+                      status,
+                      '<span class="badge badge-success badge-custom">Selesai</span> <span class="badge badge-warning badge-custom">Dalam Proses</span>'
+                  ]).draw().node();
+                  
+                  // Add click event for new badges
+                  $(newRow).find('.badge-success').on('click', function() {
+                      $(this).parents('tr').find('td:eq(6)').text('Selesai');
+                  });
+                  $(newRow).find('.badge-warning').on('click', function() {
+                      $(this).parents('tr').find('td:eq(6)').text('Dalam Proses');
+                  });
+
+                  $('#addOrderModal').modal('hide');
+                  $('#orderForm')[0].reset();
+              }).catch(error => {
+                  console.error('Error writing new order to Firebase Database', error);
+              });
           });
 
           // Event listener for existing 'Selesai' and 'Dalam Proses' buttons
           $('#orderTableBody').on('click', '.badge-success', function() {
-              $(this).parents('tr').find('td:eq(5)').text('Selesai');
+              $(this).parents('tr').find('td:eq(6)').text('Selesai');
           });
           $('#orderTableBody').on('click', '.badge-warning', function() {
-              $(this).parents('tr').find('td:eq(5)').text('Dalam Proses');
+              $(this).parents('tr').find('td:eq(6)').text('Dalam Proses');
           });
       });
     </script>
